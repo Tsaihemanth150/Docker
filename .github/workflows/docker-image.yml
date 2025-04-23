@@ -7,13 +7,8 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
-
-    env:
-      PKG_NAME: my-image-artifacts
-      GITEA_USER: ${{ secrets.GITEA_USERNAME }}
-      GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
 
     steps:
       - name: Checkout code
@@ -22,23 +17,11 @@ jobs:
       - name: Set up QEMU and Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image & prepare tarball
+      - name: Build Docker image (validation only)
         run: |
-          # Generate a timestamp to use as the version
+          # Generate a timestamp to use as the version (optional, can be removed)
           TIMESTAMP=$(date +%s)
           IMAGE_TAG="my-image:${TIMESTAMP}"
-          ART_NAME="${TIMESTAMP}.tar.gz"
 
-          # Build and save
+          # Build Docker image
           docker build . -f Dockerfile -t "${IMAGE_TAG}"
-          docker save "${IMAGE_TAG}" | gzip > "${ART_NAME}"
-
-          # Export for next step
-          echo "VERSION=${TIMESTAMP}" >> $GITHUB_ENV
-          echo "ART_NAME=${ART_NAME}"  >> $GITHUB_ENV
-
-      - name: Upload tarball to Gitea Generic Packages
-        run: |
-          curl --fail --user "${GITEA_USER}:${GITEA_TOKEN}" \
-               --upload-file "${ART_NAME}" \
-               "https://gitea.com/api/packages/${GITEA_USER}/generic/${PKG_NAME}/${VERSION}/${ART_NAME}"
