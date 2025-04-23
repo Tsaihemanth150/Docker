@@ -11,37 +11,36 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      PKG_NAME: my-image-artifacts      # the “package” in Gitea Packages → Generic
+      PKG_NAME: my-image-artifacts
       GITEA_USER: ${{ secrets.GITEA_USERNAME }}
       GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up QEMU and Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build Docker image & prepare tarball
         run: |
+          # Generate a timestamp to use as image tag and version
           TIMESTAMP=$(date +%s)
-          IMAGE_TAG=my-image:${TIMESTAMP}
-          docker build . -f Dockerfile -t $IMAGE_TAG
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-          echo "ART_NAME=${TIMESTAMP}.tar.gz" >> $GITHUB_ENV
+          IMAGE_TAG="my-image:${TIMESTAMP}"
+          ART_NAME="${TIMESTAMP}.tar.gz"
 
-      - name: Save image to tarball
-        run: |
-          # save & gzip it
-          docker save ${{ env.IMAGE_TAG }} \
-            | gzip > ${ART_NAME}
+          # Build the Docker image
+          docker build . -f Dockerfile -t "${IMAGE_TAG}"
+
+          # Save the image to a gzipped tarball
+          docker save "${IMAGE_TAG}" | gzip > "${ART_NAME}"
+
+          # Export variables for the next step
+          echo "VERSION=${TIMESTAMP}" >> $GITHUB_ENV
+          echo "ART_NAME=${ART_NAME}"  >> $GITHUB_ENV
 
       - name: Upload tarball to Gitea Generic Packages
         run: |
-          curl --fail --user $GITEA_USER:$GITEA_TOKEN \
-               --upload-file ${ART_NAME} \
-               https://gitea.com/api/packages/$GITEA_USER/generic/$PKG_NAME/${{ env.IMAGE_TAG }}/${ART_NAME}
-
-      - name: Confirm upload URL
-        run: |
-          echo "Your image tar is now in:"
-          echo "https://gitea.com/$GITEA_USER/packages/generic/$PKG_NAME/${{ env.IMAGE_TAG }}/${ART_NAME}"
+          curl --fail --user "${GITEA_USER}:${GITEA_TOKEN}" \
+               --upload-file "${ART_NAME}" \
+               "https://gitea.com/api/packages/${GITEA_USER}/generic/${PKG_NAME}/${VERSION}/${ART_NAME}"
