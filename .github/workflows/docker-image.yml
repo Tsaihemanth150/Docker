@@ -7,26 +7,41 @@ on:
     branches: [ "main" ]
 
 jobs:
-
   build-and-push:
-
     runs-on: ubuntu-latest
 
+    env:
+      PKG_NAME: my-image-artifacts      # the “package” in Gitea Packages → Generic
+      GITEA_USER: ${{ secrets.GITEA_USERNAME }}
+      GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Set up QEMU and Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Log in to Gitea Container Registry
-      run: echo "${{ secrets.GITEA_REGISTRY_PASSWORD }}" | docker login ${{ secrets.GITEA_REGISTRY_URL }} -u ${{ secrets.GITEA_REGISTRY_USERNAME }} --password-stdin
+      - name: Build Docker image
+        run: |
+          TIMESTAMP=$(date +%s)
+          IMAGE_TAG=my-image:${TIMESTAMP}
+          docker build . -f Dockerfile -t $IMAGE_TAG
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "ART_NAME=${TIMESTAMP}.tar.gz" >> $GITHUB_ENV
 
-    - name: Build and tag Docker image
-      run: |
-        TIMESTAMP=$(date +%s)
-        docker build . -f Dockerfile -t ${{ secrets.GITEA_REGISTRY_URL }}/<your-namespace>/<your-image-name>:${TIMESTAMP}
-        echo "IMAGE_TAG=${TIMESTAMP}" >> $GITHUB_ENV
+      - name: Save image to tarball
+        run: |
+          # save & gzip it
+          docker save ${{ env.IMAGE_TAG }} \
+            | gzip > ${ART_NAME}
 
-    - name: Push Docker image to Gitea
-      run: |
-        docker push ${{ secrets.GITEA_REGISTRY_URL }}/<your-namespace>/<your-image-name>:${{ env.IMAGE_TAG }}
+      - name: Upload tarball to Gitea Generic Packages
+        run: |
+          curl --fail --user $GITEA_USER:$GITEA_TOKEN \
+               --upload-file ${ART_NAME} \
+               https://gitea.com/api/packages/$GITEA_USER/generic/$PKG_NAME/${{ env.IMAGE_TAG }}/${ART_NAME}
+
+      - name: Confirm upload URL
+        run: |
+          echo "Your image tar is now in:"
+          echo "https://gitea.com/$GITEA_USER/packages/generic/$PKG_NAME/${{ env.IMAGE_TAG }}/${ART_NAME}"
