@@ -24,18 +24,16 @@ jobs:
 
       - name: Build Docker image & prepare tarball
         run: |
-          # Generate a timestamp to use as image tag and version
+          # Generate a timestamp to use as the version
           TIMESTAMP=$(date +%s)
           IMAGE_TAG="my-image:${TIMESTAMP}"
           ART_NAME="${TIMESTAMP}.tar.gz"
 
-          # Build the Docker image
+          # Build and save
           docker build . -f Dockerfile -t "${IMAGE_TAG}"
-
-          # Save the image to a gzipped tarball
           docker save "${IMAGE_TAG}" | gzip > "${ART_NAME}"
 
-          # Export variables for the next step
+          # Export for next step
           echo "VERSION=${TIMESTAMP}" >> $GITHUB_ENV
           echo "ART_NAME=${ART_NAME}"  >> $GITHUB_ENV
 
